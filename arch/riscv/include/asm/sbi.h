@@ -30,6 +30,7 @@ enum sbi_ext_id {
 	SBI_EXT_HSM = 0x48534D,
 	SBI_EXT_SRST = 0x53525354,
 	SBI_EXT_PMU = 0x504D55,
+	SBI_EXT_RPXY = 0x52505859,
 
 	/* Experimentals extensions must lie within this range */
 	SBI_EXT_EXPERIMENTAL_START = 0x08000000,
@@ -83,6 +84,14 @@ enum sbi_hsm_hart_state {
 	SBI_HSM_STATE_SUSPENDED,
 	SBI_HSM_STATE_SUSPEND_PENDING,
 	SBI_HSM_STATE_RESUME_PENDING,
+};
+
+enum sbi_ext_rpxy_fid {
+	SBI_EXT_RPXY_PROBE = 0,
+	SBI_EXT_RPXY_SETUP_SHMEM,
+	SBI_EXT_RPXY_SEND_NORMAL_MSG,
+	SBI_EXT_RPXY_SEND_POSTED_MSG,
+	SBI_EXT_RPXY_GET_NOTIFICATIONS,
 };
 
 #define SBI_HSM_SUSP_BASE_MASK			0x7fffffff
@@ -331,5 +340,17 @@ static inline void sbi_init(void) {}
 unsigned long riscv_cached_mvendorid(unsigned int cpu_id);
 unsigned long riscv_cached_marchid(unsigned int cpu_id);
 unsigned long riscv_cached_mimpid(unsigned int cpu_id);
+
+int sbi_rpxy_srvgrp_probe(u32 transportid, u32 srvgrpid, unsigned long *val);
+
+int sbi_rpxy_send_normal_message(u32 transportid, u32 srvgrpid, u8 srvid,
+				 void *tx, unsigned long tx_msglen,
+				 void *rx, unsigned long *rx_msglen);
+
+int sbi_rpxy_send_posted_message(u32 transportid, u32 srvgrpid, u8 srvid,
+				 void *tx, unsigned long tx_msglen);
+
+int sbi_rpxy_get_notifications(u32 transportid, u32 srvgrpid,
+			       void *rx, unsigned long *rx_msglen);
 
 #endif /* _ASM_RISCV_SBI_H */
