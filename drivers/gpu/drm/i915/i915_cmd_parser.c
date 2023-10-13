@@ -1202,9 +1202,14 @@ static u32 *copy_batch(struct drm_i915_gem_object *dst_obj,
 		 * validate up to the end of the batch.
 		 */
 		remain = length;
-		if (dst_needs_clflush & CLFLUSH_BEFORE)
+		if (dst_needs_clflush & CLFLUSH_BEFORE) {
+#ifdef CONFIG_X86
 			remain = round_up(remain,
 					  boot_cpu_data.x86_clflush_size);
+#else
+			BUG();
+#endif
+		}
 
 		ptr = dst;
 		x = offset_in_page(offset);

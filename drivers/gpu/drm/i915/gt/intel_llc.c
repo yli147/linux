@@ -3,7 +3,9 @@
  * Copyright © 2019 Intel Corporation
  */
 
+#ifdef CONFIG_X86
 #include <asm/tsc.h>
+#endif
 #include <linux/cpufreq.h>
 
 #include "i915_drv.h"
@@ -37,11 +39,15 @@ static unsigned int cpu_max_MHz(void)
 		max_khz = policy->cpuinfo.max_freq;
 		cpufreq_cpu_put(policy);
 	} else {
+#ifdef CONFIG_X86
 		/*
 		 * Default to measured freq if none found, PCU will ensure we
 		 * don't go over
 		 */
 		max_khz = tsc_khz;
+#else
+		BUG();
+#endif
 	}
 
 	return max_khz / 1000;

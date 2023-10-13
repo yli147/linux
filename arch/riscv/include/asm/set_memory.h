@@ -7,6 +7,9 @@
 #define _ASM_RISCV_SET_MEMORY_H
 
 #ifndef __ASSEMBLY__
+
+#include <linux/mm.h>
+
 /*
  * Functions to change memory attributes.
  */

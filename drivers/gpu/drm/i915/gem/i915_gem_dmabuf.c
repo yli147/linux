@@ -260,8 +260,13 @@ static int i915_gem_object_get_pages_dmabuf(struct drm_i915_gem_object *obj)
 	 * the driver.
 	 */
 	if (i915_gem_object_can_bypass_llc(obj) ||
-	    (!HAS_LLC(i915) && !IS_DG1(i915)))
+	    (!HAS_LLC(i915) && !IS_DG1(i915))) {
+#ifdef CONFIG_X86
 		wbinvd_on_all_cpus();
+#else
+		BUG();
+#endif
+	}
 
 	__i915_gem_object_set_pages(obj, sgt);
 

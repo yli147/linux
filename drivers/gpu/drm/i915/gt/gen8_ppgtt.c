@@ -18,12 +18,17 @@
 static u64 gen8_pde_encode(const dma_addr_t addr,
 			   const enum i915_cache_level level)
 {
+#ifndef CONFIG_X86
+	u64 pde = addr;
+	printk("NYI %s\n", __FUNCTION__);
+#else
 	u64 pde = addr | GEN8_PAGE_PRESENT | GEN8_PAGE_RW;
 
 	if (level != I915_CACHE_NONE)
 		pde |= PPAT_CACHED_PDE;
 	else
 		pde |= PPAT_UNCACHED;
+#endif
 
 	return pde;
 }
@@ -32,6 +37,10 @@ static u64 gen8_pte_encode(dma_addr_t addr,
 			   enum i915_cache_level level,
 			   u32 flags)
 {
+#ifndef CONFIG_X86
+	gen8_pte_t pte = addr;
+	printk("NYI %s\n", __FUNCTION__);
+#else
 	gen8_pte_t pte = addr | GEN8_PAGE_PRESENT | GEN8_PAGE_RW;
 
 	if (unlikely(flags & PTE_READ_ONLY))
@@ -51,6 +60,7 @@ static u64 gen8_pte_encode(dma_addr_t addr,
 		pte |= PPAT_CACHED;
 		break;
 	}
+#endif
 
 	return pte;
 }

@@ -180,7 +180,11 @@ struct intel_uncore {
 		enum forcewake_domain_id id;
 		enum forcewake_domains mask;
 		unsigned int wake_count;
+#ifdef CONFIG_X86
 		bool active;
+#else
+		int active;
+#endif
 		struct hrtimer timer;
 		u32 __iomem *reg_set;
 		u32 __iomem *reg_ack;

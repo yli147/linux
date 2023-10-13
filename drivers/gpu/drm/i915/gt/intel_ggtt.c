@@ -1184,8 +1184,10 @@ static int ggtt_probe_hw(struct i915_ggtt *ggtt, struct intel_gt *gt)
 	drm_dbg(&i915->drm, "GGTT size = %lluM\n", ggtt->vm.total >> 20);
 	drm_dbg(&i915->drm, "GMADR size = %lluM\n",
 		(u64)ggtt->mappable_end >> 20);
+#ifdef CONFIG_X86
 	drm_dbg(&i915->drm, "DSM size = %lluM\n",
 		(u64)resource_size(&intel_graphics_stolen_res) >> 20);
+#endif
 
 	return 0;
 }
@@ -1304,8 +1306,10 @@ void i915_ggtt_resume(struct i915_ggtt *ggtt)
 
 	ggtt->invalidate(ggtt);
 
+#if CONFIG_X86
 	if (flush)
 		wbinvd_on_all_cpus();
+#endif
 
 	if (GRAPHICS_VER(ggtt->vm.i915) >= 8)
 		setup_private_pat(ggtt->vm.gt);
