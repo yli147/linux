@@ -28,6 +28,45 @@
 		reg = <0x0 0x80000000 0x4 0x00000000>;
 	};
 
+	pwmleds {
+		compatible = "pwm-leds";
+		green-d12 {
+			label = "green:d12";
+			color = <LED_COLOR_ID_GREEN>;
+			pwms = <&pwm0 0 7812500 PWM_POLARITY_INVERTED>;
+			active-low = <1>;
+			max-brightness = <255>;
+			linux,default-trigger = "none";
+		};
+
+		green-d2 {
+			label = "green:d2";
+			color = <LED_COLOR_ID_GREEN>;
+			pwms = <&pwm0 1 7812500 PWM_POLARITY_INVERTED>;
+			active-low = <1>;
+			max-brightness = <255>;
+			linux,default-trigger = "none";
+		};
+
+		red-d2 {
+			label = "red:d2";
+			color = <LED_COLOR_ID_RED>;
+			pwms = <&pwm0 2 7812500 PWM_POLARITY_INVERTED>;
+			active-low = <1>;
+			max-brightness = <255>;
+			linux,default-trigger = "none";
+		};
+
+		blue-d2 {
+			label = "blue:d2";
+			color = <LED_COLOR_ID_BLUE>;
+			pwms = <&pwm0 3 7812500 PWM_POLARITY_INVERTED>;
+			active-low = <1>;
+			max-brightness = <255>;
+			linux,default-trigger = "none";
+		};
+	};
+
 	hfclk: hfclk {
 		#clock-cells = <0>;
 		compatible = "fixed-clock";
@@ -102,7 +141,6 @@
 	temperature-sensor@4c {
 		compatible = "ti,tmp451";
 		reg = <0x4c>;
-		vcc-supply = <&vdd_bpro>;
 		interrupt-parent = <&gpio>;
 		interrupts = <6 IRQ_TYPE_LEVEL_LOW>;
 	};
