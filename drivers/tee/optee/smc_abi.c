@@ -1279,7 +1279,7 @@ static void optee_smccc_smc(unsigned long a0, unsigned long a1,
 			    unsigned long a6, unsigned long a7,
 			    struct arm_smccc_res *res)
 {
-	arm_smccc_smc(a0, a1, a2, a3, a4, a5, a6, a7, res);
+	//arm_smccc_smc(a0, a1, a2, a3, a4, a5, a6, a7, res);
 }
 
 static void optee_smccc_hvc(unsigned long a0, unsigned long a1,
@@ -1288,7 +1288,33 @@ static void optee_smccc_hvc(unsigned long a0, unsigned long a1,
 			    unsigned long a6, unsigned long a7,
 			    struct arm_smccc_res *res)
 {
-	arm_smccc_hvc(a0, a1, a2, a3, a4, a5, a6, a7, res);
+	//arm_smccc_hvc(a0, a1, a2, a3, a4, a5, a6, a7, res);
+}
+
+/* Simple wrapper functions to be able to use a function pointer */
+static void optee_riscv_sbi(unsigned long a0, unsigned long a1,
+			    unsigned long a2, unsigned long a3,
+			    unsigned long a4, unsigned long a5,
+			    unsigned long a6, unsigned long a7,
+			    struct arm_smccc_res *res)
+{
+	/* SBI_EXT_TEE */
+	register uintptr_t __a0 asm ("a0") = a0;
+	register uintptr_t __a1 asm ("a1") = a1;
+	register uintptr_t __a2 asm ("a2") = a2;
+	register uintptr_t __a3 asm ("a3") = a3;
+	register uintptr_t __a4 asm ("a4") = a4;
+	register uintptr_t __a5 asm ("a5") = a5;
+	register uintptr_t __a6 asm ("a6") = a6;
+	register uintptr_t __a7 asm ("a7") = 0x544545;
+	asm volatile ("ecall"
+		      : "+r" (__a0), "+r" (__a1), "+r" (__a2), "+r" (__a3)
+		      : "r" (__a4), "r" (__a5), "r" (__a6), "r" (__a7)
+		      : "memory");
+	res->a0 = __a0;
+	res->a1 = __a1;
+	res->a2 = __a2;
+	res->a3 = __a3;
 }
 
 static optee_invoke_fn *get_invoke_func(struct device *dev)
@@ -1306,6 +1332,8 @@ static optee_invoke_fn *get_invoke_func(struct device *dev)
 		return optee_smccc_hvc;
 	else if (!strcmp("smc", method))
 		return optee_smccc_smc;
+	else if (!strcmp("riscv_sbi", method))
+		return optee_riscv_sbi;
 
 	pr_warn("invalid \"method\" property: %s\n", method);
 	return ERR_PTR(-EINVAL);
