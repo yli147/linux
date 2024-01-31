@@ -1374,6 +1374,8 @@ optee_config_shm_memremap(optee_invoke_fn *invoke_fn, void **memremaped_shm)
 	void *rc;
 
 	invoke_fn(OPTEE_SMC_GET_SHM_CONFIG, 0, 0, 0, 0, 0, 0, 0, &res.smccc);
+	pr_warn("optee_smccc_smc - optee_config_shm_memremap %lx %lx %lx %lx \n", 
+	res.result.status, res.result.settings, res.result.start, res.result.size);
 	if (res.result.status != OPTEE_SMC_RETURN_OK) {
 		pr_err("static shm service not available\n");
 		return ERR_PTR(-ENOENT);
@@ -1434,9 +1436,11 @@ struct rpmi_tee_tx {
 };
 
 struct rpmi_tee_rx {
-	u32 value;
-	u32 extp1;
-	u32 extp2;
+	unsigned long value;
+	unsigned long extp1;
+	unsigned long extp2;
+	unsigned long extp3;
+	unsigned long extp4;
 };
 
 /* Simple wrapper functions to be able to use a function pointer */
@@ -1463,23 +1467,18 @@ static void optee_smccc_smc(unsigned long a0, unsigned long a1,
 	tx.a5 = a5;
 	tx.a6 = a6;
 	tx.a7 = a7;
-    pr_warn("optee_smccc_smc - riscv archtecture call sbi rpxy here\n");
+    pr_warn("optee_smccc_smc - riscv archtecture call parameter %lx %lx %lx %lx %lx %lx %lx %lx \n", a0, a1, a2, a3, a4, a5, a6, a7);
 	ret = sbi_rpxy_send_normal_message(rpxy_ctx.tpid,
 					   RPMI_SRVGRP_TEE,
 					   RPMI_TEE_SRV_TEE_COMMUNICATE,
 					   &tx, sizeof(struct rpmi_tee_tx), &rx, &rxmsg_len);
-	res->a0 = ret;
-	res->a1 = rx.value;
-	res->a2 = rx.extp1;
-	res->a3 = rx.extp2;
+	//0xF17F0000
+	pr_warn("optee_smccc_smc - riscv archtecture call result %lx %lx %lx %lx %lx\n", rx.value, rx.extp1, rx.extp2, rx.extp3, rx.extp4);
 
-	/* Follow the code here https://github.com/ventanamicro/linux/commit/dd079a401532f84a5753828af9bf6a2dc10c8375#diff-06a5bbc4d6f52fa526899420c616095363ce108603272dadd836a036bdb35ab0
-	struct sbiret ret;
-	ret = sbi_ecall(SBI_EXT_OPTEE, a0, a1, a2, a3, a4, a5, a6);
-	res->a0 = ret.error;
-	res->a1 = ret.value;
-	res->a2 = ret.extp1;
-	res->a3 = ret.extp2; */
+	res->a0 = rx.extp1;
+	res->a1 = rx.extp2;
+	res->a2 = rx.extp3;
+	res->a3 = rx.extp4;
 #endif
 }
 
