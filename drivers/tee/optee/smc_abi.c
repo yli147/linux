@@ -1466,6 +1466,7 @@ static void optee_smccc_smc(unsigned long a0, unsigned long a1,
 	tx.a4 = a4;
 	tx.a5 = a5;
 	tx.a6 = a6;
+	tx.a6 = a0;
 	tx.a7 = a7;
     pr_warn("optee_smccc_smc - riscv archtecture call parameter %lx %lx %lx %lx %lx %lx %lx %lx \n", a0, a1, a2, a3, a4, a5, a6, a7);
 	ret = sbi_rpxy_send_normal_message(rpxy_ctx.tpid,
