@@ -29,6 +29,7 @@
 #include <linux/kmemleak.h>
 #define CREATE_TRACE_POINTS
 #include "optee_trace.h"
+#include "asm/sbi.h"
 
 /*
  * This file implement the SMC ABI used when communicating with secure world
@@ -1272,6 +1273,52 @@ optee_config_shm_memremap(optee_invoke_fn *invoke_fn, void **memremaped_shm)
 	return rc;
 }
 
+/** RPXY transport protocol type */
+#define RPXY_TRANS_PROT_MASK	(0xFFFF0000)
+#define RPXY_TRANS_PROT_SHIFT	(16)
+enum rpxy_transport_protocol {
+	RPXY_TRANS_PROT_RPMI = 0,
+	RPXY_TRANS_PROT_SEC = 1,
+	RPXY_TRANS_PROT_ID_MAX_COUNT,
+};
+
+/** SPD TEE ServiceGroups IDs */
+enum spd_servicegroup_id {
+	SPD_SRVGRP_ID_MIN = 0,
+	SPD_SRVGRP_BASE = 0x00001,
+	SPD_SRVGRP_ID_MAX_COUNT,
+};
+
+/** SPD TEE Base ServiceGroup Service IDs */
+enum spd_base_service_id {
+	SPD_BASE_SRV_COMMUNICATE = 0x01,
+	SPD_BASE_SRV_COMPLETE = 0x02,
+};
+
+struct sbi_rpxy_ctx {
+	u32 tpid;
+	u32 max_msg_len;
+};
+
+struct rpmi_tee_tx {
+	unsigned long a0;
+	unsigned long a1;
+	unsigned long a2;
+	unsigned long a3;
+	unsigned long a4;
+	unsigned long a5;
+	unsigned long a6;
+	unsigned long a7;
+};
+
+struct rpmi_tee_rx {
+	unsigned long value;
+	unsigned long extp1;
+	unsigned long extp2;
+	unsigned long extp3;
+};
+
+static struct sbi_rpxy_ctx rpxy_ctx;
 /* Simple wrapper functions to be able to use a function pointer */
 static void optee_smccc_smc(unsigned long a0, unsigned long a1,
 			    unsigned long a2, unsigned long a3,
@@ -1298,23 +1345,36 @@ static void optee_riscv_sbi(unsigned long a0, unsigned long a1,
 			    unsigned long a6, unsigned long a7,
 			    struct arm_smccc_res *res)
 {
-	/* SBI_EXT_TEE */
-	register uintptr_t __a0 asm ("a0") = a0;
-	register uintptr_t __a1 asm ("a1") = a1;
-	register uintptr_t __a2 asm ("a2") = a2;
-	register uintptr_t __a3 asm ("a3") = a3;
-	register uintptr_t __a4 asm ("a4") = a4;
-	register uintptr_t __a5 asm ("a5") = a5;
-	register uintptr_t __a6 asm ("a6") = a6;
-	register uintptr_t __a7 asm ("a7") = 0x544545;
-	asm volatile ("ecall"
-		      : "+r" (__a0), "+r" (__a1), "+r" (__a2), "+r" (__a3)
-		      : "r" (__a4), "r" (__a5), "r" (__a6), "r" (__a7)
-		      : "memory");
-	res->a0 = __a0;
-	res->a1 = __a1;
-	res->a2 = __a2;
-	res->a3 = __a3;
+	struct rpmi_tee_tx tx;
+	struct rpmi_tee_rx rx;
+	unsigned long rxmsg_len;
+	int ret;
+
+	tx.a0 = a0;
+	tx.a1 = a1;
+	tx.a2 = a2;
+	tx.a3 = a3;
+	tx.a4 = a4;
+	tx.a5 = a5;
+	tx.a6 = a6;
+	tx.a6 = a0;
+	tx.a7 = a7;
+	pr_warn("optee_smccc_smc - riscv archtecture call parameter %lx %lx %lx %lx %lx %lx %lx %lx \n", a0, a1, a2, a3, a4, a5, a6, a7);
+
+	ret = sbi_rpxy_send_normal_message(rpxy_ctx.tpid |
+				((RPXY_TRANS_PROT_SEC << RPXY_TRANS_PROT_SHIFT)
+				& RPXY_TRANS_PROT_MASK),
+				SPD_SRVGRP_BASE,
+				SPD_BASE_SRV_COMMUNICATE,
+				&tx, sizeof(struct rpmi_tee_tx), &rx, &rxmsg_len);
+	if (ret)
+		pr_warn("optee_smccc_smc - riscv archtecture call result %d\n", ret);
+	pr_warn("optee_smccc_smc - riscv archtecture call result %lx %lx %lx %lx %lx\n", rx.value, rx.extp1, rx.extp2, rx.extp3);
+
+	res->a0 = rx.value;
+	res->a1 = rx.extp1;
+	res->a2 = rx.extp2;
+	res->a3 = rx.extp3;
 }
 
 static optee_invoke_fn *get_invoke_func(struct device *dev)
@@ -1384,6 +1444,33 @@ static void optee_shutdown(struct platform_device *pdev)
 		optee_disable_shm_cache(optee);
 }
 
+static int sbi_rpxy_tee_probe(struct platform_device *pdev)
+{
+	u32 tpid;
+	long max_msg_len;
+	int ret, num_clocks, clkid;
+	struct clk_hw *hw_ptr;
+	struct clk_hw_onecell_data *clk_data;
+
+	if ((sbi_spec_version < sbi_mk_version(1, 0)) ||
+		sbi_probe_extension(SBI_EXT_RPXY) <= 0) {
+		dev_err(&pdev->dev, "sbi rpxy extension not present\n");
+		return -ENODEV;
+	}
+
+	rpxy_ctx.tpid = 0x0;
+	ret = sbi_rpxy_srvgrp_probe(rpxy_ctx.tpid |
+				((RPXY_TRANS_PROT_SEC << RPXY_TRANS_PROT_SHIFT)
+				& RPXY_TRANS_PROT_MASK),
+				SPD_SRVGRP_BASE, &max_msg_len);
+	if (!max_msg_len) {
+		dev_err(&pdev->dev, "RPXY SPD TEE Service Group Probe Failed\n");
+		return -ENODEV;
+	}
+	rpxy_ctx.max_msg_len = max_msg_len;
+
+	return ret;
+}
 static int optee_probe(struct platform_device *pdev)
 {
 	optee_invoke_fn *invoke_fn;
@@ -1398,6 +1485,7 @@ static int optee_probe(struct platform_device *pdev)
 	u32 sec_caps;
 	int rc;
 
+#ifndef CONFIG_RISCV
 	invoke_fn = get_invoke_func(&pdev->dev);
 	if (IS_ERR(invoke_fn))
 		return PTR_ERR(invoke_fn);
@@ -1445,6 +1533,17 @@ static int optee_probe(struct platform_device *pdev)
 
 		pool = optee_shm_pool_alloc_pages();
 	}
+#else
+	rc = sbi_rpxy_tee_probe(pdev);
+	if (rc)
+		return rc;
+
+	invoke_fn = get_invoke_func(&pdev->dev);
+	if (IS_ERR(invoke_fn))
+		return PTR_ERR(invoke_fn);
+
+	sec_caps |= OPTEE_SMC_SEC_CAP_HAVE_RESERVED_SHM;
+#endif
 
 	/*
 	 * If dynamic shared memory is not available or failed - try static one
