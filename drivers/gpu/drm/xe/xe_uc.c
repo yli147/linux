@@ -145,6 +145,8 @@ int xe_uc_init_hwconfig(struct xe_uc *uc)
  */
 int xe_uc_init_hw(struct xe_uc *uc)
 {
+	return 0;
+#if 0
 	int ret;
 
 	/* GuC submission not enabled, nothing to do */
@@ -183,6 +185,7 @@ int xe_uc_init_hw(struct xe_uc *uc)
 	xe_gsc_load_start(&uc->gsc);
 
 	return 0;
+#endif	
 }
 
 int xe_uc_fini_hw(struct xe_uc *uc)

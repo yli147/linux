@@ -589,6 +589,7 @@ static void irq_uninstall(struct drm_device *drm, void *arg)
 
 int xe_irq_install(struct xe_device *xe)
 {
+#if 0
 	struct pci_dev *pdev = to_pci_dev(xe->drm.dev);
 	irq_handler_t irq_handler;
 	int err, irq;
@@ -628,6 +629,11 @@ free_irq_handler:
 	free_irq(irq, xe);
 
 	return err;
+#else
+    xe->irq.enabled = true;
+    xe_irq_reset(xe);
+    return 0;
+#endif
 }
 
 void xe_irq_shutdown(struct xe_device *xe)

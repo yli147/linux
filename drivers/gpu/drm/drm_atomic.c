@@ -68,6 +68,7 @@ EXPORT_SYMBOL(__drm_crtc_commit_free);
  */
 int drm_crtc_commit_wait(struct drm_crtc_commit *commit)
 {
+#if 0
 	unsigned long timeout = 10 * HZ;
 	int ret;
 
@@ -89,7 +90,7 @@ int drm_crtc_commit_wait(struct drm_crtc_commit *commit)
 		drm_err(commit->crtc->dev, "flip_done timed out\n");
 		return -ETIMEDOUT;
 	}
-
+#endif
 	return 0;
 }
 EXPORT_SYMBOL(drm_crtc_commit_wait);

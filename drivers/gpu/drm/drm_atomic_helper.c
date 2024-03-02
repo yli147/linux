@@ -1704,6 +1704,7 @@ EXPORT_SYMBOL(drm_atomic_helper_wait_for_vblanks);
 void drm_atomic_helper_wait_for_flip_done(struct drm_device *dev,
 					  struct drm_atomic_state *old_state)
 {
+#if 0
 	struct drm_crtc *crtc;
 	int i;
 
@@ -1724,6 +1725,7 @@ void drm_atomic_helper_wait_for_flip_done(struct drm_device *dev,
 
 	if (old_state->fake_commit)
 		complete_all(&old_state->fake_commit->flip_done);
+#endif	
 }
 EXPORT_SYMBOL(drm_atomic_helper_wait_for_flip_done);
 
