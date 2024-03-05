@@ -1475,7 +1475,6 @@ static void optee_smccc_smc(unsigned long a0, unsigned long a1,
 	tx.a4 = a4;
 	tx.a5 = a5;
 	tx.a6 = a6;
-	tx.a6 = a0;
 	tx.a7 = a7;
 	ret = sbi_rpxy_send_normal_message(rpxy_ctx.tpid |
 				((RPXY_TRANS_PROT_SEC << RPXY_TRANS_PROT_SHIFT)
@@ -1724,7 +1723,10 @@ static int optee_probe(struct platform_device *pdev)
 	u32 sec_caps;
 	int rc;
 
-#ifndef CONFIG_RISCV
+	rc = sbi_rpxy_tee_probe(pdev);
+	if (rc)
+		return rc;
+
 	invoke_fn = get_invoke_func(&pdev->dev);
 	if (IS_ERR(invoke_fn))
 		return PTR_ERR(invoke_fn);
@@ -1776,21 +1778,6 @@ static int optee_probe(struct platform_device *pdev)
 
 		pool = optee_shm_pool_alloc_pages();
 	}
-#else
-	rc = sbi_rpxy_tee_probe(pdev);
-	if (rc)
-		return rc;
-
-	invoke_fn = get_invoke_func(&pdev->dev);
-	if (IS_ERR(invoke_fn))
-		return PTR_ERR(invoke_fn);
-
-	rc = optee_load_fw(pdev, invoke_fn);
-	if (rc)
-		return rc;
-
-	sec_caps |= OPTEE_SMC_SEC_CAP_HAVE_RESERVED_SHM;
-#endif
 
 	/*
 	 * If dynamic shared memory is not available or failed - try static one
