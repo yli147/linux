@@ -32,6 +32,7 @@
 #include <linux/kmemleak.h>
 #define CREATE_TRACE_POINTS
 #include "optee_trace.h"
+#include <asm/sbi.h>
 
 /*
  * This file implement the SMC ABI used when communicating with secure world
@@ -1405,6 +1406,52 @@ optee_config_shm_memremap(optee_invoke_fn *invoke_fn, void **memremaped_shm)
 	return rc;
 }
 
+/** RPXY transport protocol type */
+#define RPXY_TRANS_PROT_MASK	(0xFFFF0000)
+#define RPXY_TRANS_PROT_SHIFT	(16)
+enum rpxy_transport_protocol {
+	RPXY_TRANS_PROT_RPMI = 0,
+	RPXY_TRANS_PROT_SEC = 1,
+	RPXY_TRANS_PROT_ID_MAX_COUNT,
+};
+
+/** SPD TEE ServiceGroups IDs */
+enum spd_servicegroup_id {
+	SPD_SRVGRP_ID_MIN = 0,
+	SPD_SRVGRP_BASE = 0x00001,
+	SPD_SRVGRP_ID_MAX_COUNT,
+};
+
+/** SPD TEE Base ServiceGroup Service IDs */
+enum spd_base_service_id {
+	SPD_BASE_SRV_COMMUNICATE = 0x01,
+	SPD_BASE_SRV_COMPLETE = 0x02,
+};
+
+struct sbi_rpxy_ctx {
+	u32 tpid;
+	u32 max_msg_len;
+};
+
+struct rpmi_tee_tx {
+	unsigned long a0;
+	unsigned long a1;
+	unsigned long a2;
+	unsigned long a3;
+	unsigned long a4;
+	unsigned long a5;
+	unsigned long a6;
+	unsigned long a7;
+};
+
+struct rpmi_tee_rx {
+	unsigned long value;
+	unsigned long extp1;
+	unsigned long extp2;
+	unsigned long extp3;
+};
+
+static struct sbi_rpxy_ctx rpxy_ctx;
 /* Simple wrapper functions to be able to use a function pointer */
 static void optee_smccc_smc(unsigned long a0, unsigned long a1,
 			    unsigned long a2, unsigned long a3,
@@ -1412,7 +1459,7 @@ static void optee_smccc_smc(unsigned long a0, unsigned long a1,
 			    unsigned long a6, unsigned long a7,
 			    struct arm_smccc_res *res)
 {
-	arm_smccc_smc(a0, a1, a2, a3, a4, a5, a6, a7, res);
+//	arm_smccc_smc(a0, a1, a2, a3, a4, a5, a6, a7, res);
 }
 
 static void optee_smccc_hvc(unsigned long a0, unsigned long a1,
@@ -1421,7 +1468,43 @@ static void optee_smccc_hvc(unsigned long a0, unsigned long a1,
 			    unsigned long a6, unsigned long a7,
 			    struct arm_smccc_res *res)
 {
-	arm_smccc_hvc(a0, a1, a2, a3, a4, a5, a6, a7, res);
+//	arm_smccc_hvc(a0, a1, a2, a3, a4, a5, a6, a7, res);
+}
+
+/* Simple wrapper functions to be able to use a function pointer */
+static void optee_riscv_sbi(unsigned long a0, unsigned long a1,
+			    unsigned long a2, unsigned long a3,
+			    unsigned long a4, unsigned long a5,
+			    unsigned long a6, unsigned long a7,
+			    struct arm_smccc_res *res)
+{
+	struct rpmi_tee_tx tx;
+	struct rpmi_tee_rx rx;
+	unsigned long rxmsg_len;
+	int ret;
+
+	tx.a0 = a0;
+	tx.a1 = a1;
+	tx.a2 = a2;
+	tx.a3 = a3;
+	tx.a4 = a4;
+	tx.a5 = a5;
+	tx.a6 = a6;
+	tx.a7 = a7;
+
+	ret = sbi_rpxy_send_normal_message(rpxy_ctx.tpid |
+				((RPXY_TRANS_PROT_SEC << RPXY_TRANS_PROT_SHIFT)
+				& RPXY_TRANS_PROT_MASK),
+				SPD_SRVGRP_BASE,
+				SPD_BASE_SRV_COMMUNICATE,
+				&tx, sizeof(struct rpmi_tee_tx), &rx, &rxmsg_len);
+	if (ret)
+		pr_warn("optee_smccc_smc - riscv archtecture call result %d\n", ret);
+
+	res->a0 = rx.value;
+	res->a1 = rx.extp1;
+	res->a2 = rx.extp2;
+	res->a3 = rx.extp3;
 }
 
 static optee_invoke_fn *get_invoke_func(struct device *dev)
@@ -1438,7 +1521,9 @@ static optee_invoke_fn *get_invoke_func(struct device *dev)
 	if (!strcmp("hvc", method))
 		return optee_smccc_hvc;
 	else if (!strcmp("smc", method))
-		return optee_smccc_smc;
+		return optee_riscv_sbi; //Temp to direct to optee_riscv_sbi for smc;
+	else if (!strcmp("riscv_sbi", method))
+		return optee_riscv_sbi;
 
 	pr_warn("invalid \"method\" property: %s\n", method);
 	return ERR_PTR(-EINVAL);
@@ -1602,6 +1687,34 @@ static inline int optee_load_fw(struct platform_device *pdev,
 }
 #endif
 
+static int sbi_rpxy_tee_probe(struct platform_device *pdev)
+{
+	u32 tpid;
+	long max_msg_len;
+	int ret, num_clocks, clkid;
+	struct clk_hw *hw_ptr;
+	struct clk_hw_onecell_data *clk_data;
+
+	if ((sbi_spec_version < sbi_mk_version(1, 0)) ||
+		sbi_probe_extension(SBI_EXT_RPXY) <= 0) {
+		dev_err(&pdev->dev, "sbi rpxy extension not present\n");
+		return -ENODEV;
+	}
+
+	rpxy_ctx.tpid = 0x0;
+	ret = sbi_rpxy_srvgrp_probe(rpxy_ctx.tpid |
+				((RPXY_TRANS_PROT_SEC << RPXY_TRANS_PROT_SHIFT)
+				& RPXY_TRANS_PROT_MASK),
+				SPD_SRVGRP_BASE, &max_msg_len);
+	if (!max_msg_len) {
+		dev_err(&pdev->dev, "RPXY SPD TEE Service Group Probe Failed\n");
+		return -ENODEV;
+	}
+	rpxy_ctx.max_msg_len = max_msg_len;
+
+	return ret;
+}
+
 static int optee_probe(struct platform_device *pdev)
 {
 	optee_invoke_fn *invoke_fn;
@@ -1615,6 +1728,10 @@ static int optee_probe(struct platform_device *pdev)
 	u32 arg_cache_flags;
 	u32 sec_caps;
 	int rc;
+
+	rc = sbi_rpxy_tee_probe(pdev);
+	if (rc)
+		return rc;
 
 	invoke_fn = get_invoke_func(&pdev->dev);
 	if (IS_ERR(invoke_fn))
