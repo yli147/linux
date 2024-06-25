@@ -52,8 +52,9 @@ void arch_sync_dma_for_cpu(phys_addr_t paddr, size_t size,
 void arch_dma_prep_coherent(struct page *page, size_t size)
 {
 	void *flush_addr = page_address(page);
-
-	ALT_CMO_OP(flush, flush_addr, size, riscv_cbom_block_size);
+printk("arch_dma_prep_coherent %lx %x %lx %lx\n", (unsigned long)flush_addr, size, riscv_cbom_block_size, ((unsigned long)(flush_addr) & ~((riscv_cbom_block_size) - 1UL)));
+//	ALT_CMO_OP(flush, flush_addr, size, riscv_cbom_block_size);
+printk("arch_dma_prep_coherent %lx after\n", (unsigned long)flush_addr);
 }
 
 void arch_setup_dma_ops(struct device *dev, u64 dma_base, u64 size,
