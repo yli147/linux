@@ -1432,10 +1432,12 @@ static int run_init_process(const char *init_filename)
 	pr_debug("  with environment:\n");
 	for (p = envp_init; *p; p++)
 		pr_debug("    %s\n", *p);
+#if 0		
 	while(1) {
 		 printk("-");
 		 mdelay(1000);
 	}
+#endif	
 	return kernel_execve(init_filename, argv_init, envp_init);
 }
 
